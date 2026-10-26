@@ -78,24 +78,31 @@ jobs:
         run: |
           set -e
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          echo "=== Project files ==="
           ls -la
-          echo "=== Starting build ==="
-          gradle assembleDebug --stacktrace 2>&1 | tee /tmp/build.log
-          echo "=== BUILD EXIT: $? ==="
+          gradle assembleDebug --stacktrace
 
-      - name: Show error tail on failure
-        if: failure()
+      - name: Locate APK
         run: |
-          echo "======== LAST 120 LINES ========"
-          tail -120 /tmp/build.log || true
-          echo "======== COMPILE ERRORS ========"
-          grep -E "e: |error:|FAILED|What went wrong" /tmp/build.log | tail -40 || true
+          set -e
+          find "${{ env.PROJECT_DIR }}" -name "*.apk" -type f 2>/dev/null || true
+          APK=\( (find " \){{ env.PROJECT_DIR }}" -path "*/outputs/apk/*/*.apk" -type f 2>/dev/null | head -1)
+          if [ -z "$APK" ]; then
+            APK=\( (find " \){{ env.PROJECT_DIR }}" -name "*.apk" -type f 2>/dev/null | head -1)
+          fi
+          if [ -z "$APK" ]; then
+            echo "No APK found"
+            find "${{ env.PROJECT_DIR }}/app/build" -type f 2>/dev/null | head -40 || true
+            exit 1
+          fi
+          echo "Found APK: $APK"
+          mkdir -p collected
+          cp "$APK" collected/SC-Manager-debug.apk
+          ls -lh collected/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SC-Manager-debug-apk
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
+          path: collected/SC-Manager-debug.apk
           if-no-files-found: error
           retention-days: 14
